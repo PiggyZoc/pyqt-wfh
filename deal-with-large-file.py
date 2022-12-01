@@ -9,7 +9,7 @@ def _process(path):
 
 if __name__ == '__main__':
     t = time.time()
-    pool = futures.ThreadPoolExecutor(max_workers=4)
+    pool = futures.ThreadPoolExecutor(max_workers=10)
     with open("large.log", "r") as _f:
         lines = _f.readlines()
         for line in lines:

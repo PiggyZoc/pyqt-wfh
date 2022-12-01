@@ -1,17 +1,26 @@
 import time
+import os
 
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 
 
 class Worker(QObject):
-    progress = pyqtSignal(int)
+    progress = pyqtSignal(bool)
     completed = pyqtSignal(int)
 
-    @pyqtSlot(int)
-    def do_work(self, n):
-        for i in range(1, n + 1):
-            time.sleep(1)
-            self.progress.emit(i)
+    def _process(self, path):
+        return os.path.exists(path)
 
-        self.completed.emit(i)
+    def __init__(self, buf):
+        super().__init__()
+        self.buf = buf
 
+    @pyqtSlot()
+    def do_work(self):
+        s = time.time()
+        for line in self.buf:
+            res = self._process(line.replace('\n', ''))
+            self.progress.emit(res)
+        print(f"Elasped: {time.time()-s}")
+
+        # self.completed.emit(i)

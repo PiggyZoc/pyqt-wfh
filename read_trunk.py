@@ -57,27 +57,32 @@ if __name__ == '__main__':
     # lines = read_trunk(filename,s,size)
     # print(lines)
 
-    pool = futures.ThreadPoolExecutor(max_workers=10)
+    # pool = futures.ThreadPoolExecutor(max_workers=10)
     #
     t1 = time.time()
     big_file = open("large.log", "r")
     # # 950
-    BUF_SIZE = 2 * 1024 * 1024
+    file_size = os.path.getsize("large.log")
+
+    BUF_SIZE =  file_size // 18
+    line_num = 0
     tem_lines = big_file.readlines(BUF_SIZE)
+    idx = 0
     while tem_lines:
-        # print(idx)
+        line_num += len(tem_lines)
         # print(tem_lines[-1].replace("\n",""))
-        for line in tem_lines:
-            pool.submit(_process, line.replace("\n", ""))
+        # for line in tem_lines:
+        #     pool.submit(_process, line.replace("\n", ""))
         tem_lines = big_file.readlines(BUF_SIZE)
+    print(line_num)
     print(time.time() - t1)
 
-    t = time.time()
-    with open("large.log","r") as _f:
-        lines = _f.readlines()
-        for line in lines:
-            pool.submit(_process, line.replace("\n", ""))
-    print(time.time() - t)
+    # t = time.time()
+    # with open("large.log","r") as _f:
+    #     lines = _f.readlines()
+    #     for line in lines:
+    #         pool.submit(_process, line.replace("\n", ""))
+    # print(time.time() - t)
 
     #
     # t2 = time.time()
