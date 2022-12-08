@@ -5,8 +5,13 @@ from functools import partial
 from PyQt5.QtCore import QProcess, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QWidget, QLabel, QGridLayout, QVBoxLayout, QPushButton, QMessageBox
 
+from prj.RemarkWidget import RemarkWin
+
 
 class LintCheckWin(QWidget):
+    btn_style = "height:26px;border-radius:13px;background-color:rgb(255, 239, 0);font-weight:bold;"
+    btn_red_style = "height:26px;border-radius:13px;background-color:rgb(220,20,60);font-weight:bold;"
+    btn_green_style = "height:26px;border-radius:13px;background-color:rgb(153,230,77);font-weight:bold;"
     m_list_signal = pyqtSignal(list)
     close_signal = pyqtSignal(str)
 
@@ -33,8 +38,10 @@ class LintCheckWin(QWidget):
         self.message_box = None
         self.sub_module_btn_grp = []
         self.review_btn_grp = []
+        self.review_windows = None
         self.extract_log_processes = None
         self.final_report_path = None
+        self.progress_num = 0
         self.m_list_signal.connect(self.extract_log)
         self.parsing_config()
         self.init_ui()
@@ -61,7 +68,7 @@ class LintCheckWin(QWidget):
         self.top_widget = QWidget()
         self.top_widget.setLayout(grid_layout)
 
-        self.message_box = QLabel("Ready")
+        self.message_box = QLabel("Ready to Parse..")
         grid_layout_1 = QGridLayout()
         row = 0
         for module in self.sub_modules:
@@ -70,6 +77,7 @@ class LintCheckWin(QWidget):
             review_btn = QPushButton("Review")
             module_btn.setDisabled(True)
             review_btn.setDisabled(True)
+            review_btn.clicked.connect(partial(self.open_review_win, idx=row))
             self.sub_module_btn_grp.append(module_btn)
             self.review_btn_grp.append(review_btn)
             grid_layout_1.addWidget(module_btn, row, 0)
@@ -82,6 +90,14 @@ class LintCheckWin(QWidget):
         v_layout.addWidget(self.message_box)
         v_layout.addWidget(self.bottom_widget)
         self.setLayout(v_layout)
+
+    def open_review_win(self, idx):
+        if self.review_windows[idx] is None:
+            review_path = os.path.join(self.report_path, f".{idx}_review.log")
+            review_win = RemarkWin(idx, review_path)
+            review_win.save_signal.connect(self.on_save_received)
+            self.review_windows[idx] = review_win
+            review_win.show()
 
     def parsing_config(self):
         with open("config/lint_check_config", "r") as _f:
@@ -98,6 +114,7 @@ class LintCheckWin(QWidget):
                 elif line.startswith("sub_modules"):
                     self.sub_modules = line.split("=")[-1].strip().split(",")
                     self.extract_log_processes = [None] * len(self.sub_modules)
+                    self.review_windows = [None] * len(self.sub_modules)
 
     def start_process(self):
         if self.p is None:  # No process running.
@@ -135,6 +152,8 @@ class LintCheckWin(QWidget):
         print("Process finished.")
         self.p = None
         idx = 0
+        total = len(self.sub_modules)
+        self.message_box.setText(f"Parsing... Progress: {self.progress_num}/{total}")
         for m in self.sub_modules:
             m_list = [m, self.final_report_path, idx]
             idx += 1
@@ -154,9 +173,16 @@ class LintCheckWin(QWidget):
 
     def extract_log_finished(self, idx):
         print("Process finished.")
+        self.progress_num += 1
+        self.message_box.setText(f"Parsing... Progress: {self.progress_num}/{len(self.sub_modules)}")
         self.extract_log_processes[idx] = None
         self.sub_module_btn_grp[idx].setDisabled(False)
         self.review_btn_grp[idx].setDisabled(False)
+        self.sub_module_btn_grp[idx].setStyleSheet(self.btn_style)
+        self.review_btn_grp[idx].setStyleSheet(self.btn_style)
+        if self.progress_num == len(self.sub_modules):
+            time.sleep(1)
+            self.message_box.setText("Parsing Task Finished!  ")
 
     def open_sub_module_log(self, idx):
         result_path = os.path.join(self.report_path, f"{self.sub_modules[idx]}.log")
@@ -168,10 +194,24 @@ class LintCheckWin(QWidget):
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
-            for p in self.extract_log_processes:
-                print(p.state())
-            time.sleep(10)
+            # for p in self.extract_log_processes:
+            #     print(p.state())
+            # time.sleep(10)
             event.accept()
             self.close_signal.emit("lint")
         else:
             event.ignore()
+
+    @pyqtSlot(list)
+    def on_save_received(self, m_list):
+        idx = m_list[0]
+        choice = m_list[1]
+        self.review_windows[idx].close()
+        self.review_windows[idx] = None
+
+        if choice == "PEND":
+            self.sub_module_btn_grp[idx].setStyleSheet(self.btn_red_style)
+        elif choice == "GO":
+            self.sub_module_btn_grp[idx].setStyleSheet(self.btn_green_style)
+        else:
+            pass

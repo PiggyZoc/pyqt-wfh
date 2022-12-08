@@ -7,7 +7,7 @@ from prj.SocAsyncListWidget import SocAsyncListWin
 
 
 class MainWidget(QWidget):
-    btn_style = "height:26px;border-radius:13px;background-color:rgb(0,180,144);font-weight:bold"
+    btn_style = "height:26px;border-radius:13px;background-color:rgb(255, 239, 0);font-weight:bold"
 
     def __init__(self):
         super().__init__()

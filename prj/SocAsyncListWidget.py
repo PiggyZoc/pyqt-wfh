@@ -1,4 +1,5 @@
 import os.path
+import time
 from functools import partial
 from PyQt5.QtCore import pyqtSignal, QProcess, pyqtSlot
 from PyQt5.QtWidgets import QWidget, QGridLayout, QPushButton, QMessageBox
@@ -13,9 +14,13 @@ def open_file(path):
 
 class SocAsyncListWin(QWidget):
     close_signal = pyqtSignal(str)
-
+    btn_style = "height:26px;border-radius:13px;background-color:rgb(255, 239, 0);font-weight:bold;"
+    btn_red_style = "height:26px;border-radius:13px;background-color:rgb(220,20,60);font-weight:bold;"
+    btn_green_style = "height:26px;border-radius:13px;background-color:rgb(153,230,77);font-weight:bold;"
     def __init__(self):
         super().__init__()
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(500)
         self.all_btn = None
         self.folder = None
         self.module_lst = None
@@ -33,6 +38,8 @@ class SocAsyncListWin(QWidget):
         self.m_btn_lst_grp = []
         self.log_btn_grp = []
         self.lst_processes = None
+        self.out_file_ptrs = None
+        self._lock = False
         self.parsing_config()
         self.init_ui()
         self.activate_btns()
@@ -53,6 +60,7 @@ class SocAsyncListWin(QWidget):
                     self.line_buf_total = [None] * len(self.module_lst)
                     self.read_buf_threads = [None] * len(self.module_lst)
                     self.progress_lst = [0] * len(self.module_lst)
+                    self.out_file_ptrs = [None] * len(self.module_lst)
                 elif l.startswith("folder"):
                     self.folder = l.split("=")[-1].strip().replace("\n", "").strip()
                 else:
@@ -105,12 +113,17 @@ class SocAsyncListWin(QWidget):
                             print(new_line, file=out)
             self.m_btn_grp[idx].clicked.connect(partial(open_file, path=filename))
             self.m_btn_grp[idx].setDisabled(False)
+            self.m_btn_grp[idx].setStyleSheet(self.btn_style)
             self.activate_lst_btns(filename, idx)
             idx += 1
 
     def activate_lst_btns(self, filename, idx):
         bash_file = os.path.join(self.folder, f".{idx}")
+        if os.path.exists(bash_file):
+            os.remove(bash_file)
         result_file = os.path.join(self.folder, f".{idx}_lst_result")
+        if os.path.exists(result_file):
+            os.remove(result_file)
         with open(bash_file, "w+") as _bash:
             print("#!/bin/bash", file=_bash)
             with open(filename, "r") as in_file:
@@ -129,6 +142,7 @@ class SocAsyncListWin(QWidget):
 
     def trigger_lst_btn(self, idx):
         self.m_btn_lst_grp[idx].setDisabled(False)
+        self.m_btn_lst_grp[idx].setStyleSheet(self.btn_style)
         self.lst_num[idx] = 1
         self.lst_processes[idx] = None
 
@@ -138,6 +152,8 @@ class SocAsyncListWin(QWidget):
         worker.start()
         if len(self.lst_num) == sum(self.lst_num):
             all_file_lst = os.path.join(self.folder, ".final_result")
+            if os.path.exists(all_file_lst):
+                os.remove(all_file_lst)
             cmd = "cat\40"
             self.all_btn.clicked.connect(partial(open_file, path=all_file_lst))
             for each in self.lst_file_list:
@@ -150,6 +166,7 @@ class SocAsyncListWin(QWidget):
 
     def trigger_all_btn(self):
         self.all_btn.setDisabled(False)
+        self.all_btn.setStyleSheet(self.btn_style)
         self.p = None
 
     @pyqtSlot(list)
@@ -159,16 +176,43 @@ class SocAsyncListWin(QWidget):
         line_buf = m_list[2]
         self.line_buf_lst[idx] = line_buf
         self.line_buf_total[idx] = total
-        # for each_buf in self.lst_file_list[idx]:
-        #     worker = PathCheckWorker(idx, each_buf)
-        #     worker.each_result_signal.connect(self.update_progress)
-        #     self.worker_factory.append(worker)
-        #     worker.start()
+        log_result_file = os.path.join(self.folder, f".{idx}.log")
+        if os.path.exists(log_result_file):
+            os.remove(log_result_file)
+        file_ptr = open(log_result_file, "a")
+        self.out_file_ptrs[idx] = file_ptr
+        for each_buf in self.line_buf_lst[idx]:
+            worker = PathCheckWorker(idx, each_buf)
+            worker.each_result_signal.connect(self.update_progress)
+            self.worker_factory.append(worker)
+            worker.start()
 
     @pyqtSlot(list)
     def update_progress(self, m_list):
+        while self._lock:
+            time.sleep(0.2)
+        self._lock = True
         idx = m_list[0]
         self.progress_lst[idx] += 1
+        is_existed = m_list[1]
+        path = m_list[2]
+        if not is_existed:
+            print(f"{path} NOT EXIST!", file=self.out_file_ptrs[idx])
         progress = 100 * self.progress_lst[idx] / self.line_buf_total[idx]
         percent = f'%.0f%%' % progress
         self.log_btn_grp[idx].setText(percent)
+        self._lock = False
+        if progress == 100:
+            time.sleep(0.2)
+            self.out_file_ptrs[idx].close()
+            self.on_completion(idx)
+
+    def on_completion(self, idx):
+        if os.path.getsize(os.path.join(self.folder, f".{idx}.log")) == 0:
+            self.log_btn_grp[idx].setText("Passed")
+            self.log_btn_grp[idx].setStyleSheet(self.btn_green_style)
+            return
+        self.log_btn_grp[idx].setText("View Log")
+        self.log_btn_grp[idx].clicked.connect(partial(open_file, path=os.path.join(self.folder, f".{idx}.log")))
+        self.log_btn_grp[idx].setStyleSheet(self.btn_red_style)
+        self.log_btn_grp[idx].setDisabled(False)
