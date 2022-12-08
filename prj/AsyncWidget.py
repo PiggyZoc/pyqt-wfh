@@ -1,7 +1,7 @@
 import os.path
 import time
 
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal, QProcess
 from PyQt5.QtWidgets import QWidget, QProgressBar, QPushButton, QVBoxLayout
 
 from prj.worker.Worker import Worker
@@ -15,9 +15,11 @@ class AsyncWidget(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.p = None
         self.setWindowTitle("Async")
         self.filename = "large.log"
         self.progress_num = 0
+        self.start_process()
         self.init_ui()
 
 
@@ -35,6 +37,42 @@ class AsyncWidget(QWidget):
         # self.progress_bar.setMaximum(100)
         self.progress_bar.setValue(0)
         # self.do_background()
+
+    def start_process(self):
+        if self.p is None:  # No process running.
+            print("Executing process")
+            self.p = QProcess()  # Keep a reference to the QProcess (e.g. on self) while it's running.
+            self.p.readyReadStandardOutput.connect(self.handle_stdout)
+            self.p.readyReadStandardError.connect(self.handle_stderr)
+            self.p.stateChanged.connect(self.handle_state)
+            self.p.finished.connect(self.process_finished)  # Clean up once complete.
+            folder = r"/Users/mac/Desktop/testo"
+            key = r"he"
+            cmd = f'ls {folder} |grep {key}'
+            self.p.start('bash',['-c', cmd])
+
+    def handle_stderr(self):
+        data = self.p.readAllStandardError()
+        stderr = bytes(data).decode("utf8")
+        print(stderr)
+
+    def handle_stdout(self):
+        data = self.p.readAllStandardOutput()
+        stdout = bytes(data).decode("utf8")
+        print(stdout.count('\n'))
+
+    def handle_state(self, state):
+        states = {
+            QProcess.NotRunning: 'Not running',
+            QProcess.Starting: 'Starting',
+            QProcess.Running: 'Running',
+        }
+        state_name = states[state]
+        print(f"State changed: {state_name}")
+
+    def process_finished(self):
+        print("Process finished.")
+        self.p = None
 
     def on_trigger_btn_clicked(self):
         s = time.time()
