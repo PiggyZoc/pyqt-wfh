@@ -13,7 +13,7 @@ class ReadLineBufWorker(QThread):
 
     def run(self):
         file_size = os.path.getsize(self.filename)
-        buf_size = file_size // 3
+        buf_size = file_size // 4
         big_file = open(self.filename, "r")
         temp_lines = big_file.readlines(buf_size)
         results = []

@@ -93,6 +93,12 @@ class SocAsyncListWin(QWidget):
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
+            self.kill_processes()
+            time.sleep(0.1)
+            for worker in self.worker_factory:
+                if worker is not None:
+                    worker.to_terminate()
+            time.sleep(0.1)
             self.close_signal.emit("soc")
         else:
             event.ignore()
@@ -216,3 +222,10 @@ class SocAsyncListWin(QWidget):
         self.log_btn_grp[idx].clicked.connect(partial(open_file, path=os.path.join(self.folder, f".{idx}.log")))
         self.log_btn_grp[idx].setStyleSheet(self.btn_red_style)
         self.log_btn_grp[idx].setDisabled(False)
+
+    def kill_processes(self):
+        for p in self.lst_processes:
+            if p is not None:
+                p.kill()
+        if self.p is not None:
+            self.p.kill()

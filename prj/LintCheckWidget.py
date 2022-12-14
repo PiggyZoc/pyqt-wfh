@@ -194,9 +194,8 @@ class LintCheckWin(QWidget):
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
-            # for p in self.extract_log_processes:
-            #     print(p.state())
-            # time.sleep(10)
+            self.kill_all_processes()
+            time.sleep(0.2)
             event.accept()
             self.close_signal.emit("lint")
         else:
@@ -215,3 +214,10 @@ class LintCheckWin(QWidget):
             self.sub_module_btn_grp[idx].setStyleSheet(self.btn_green_style)
         else:
             pass
+
+    def kill_all_processes(self):
+        if self.p is not None:
+            self.p.kill()
+        for p in self.extract_log_processes:
+            if p is not None:
+                p.kill()
